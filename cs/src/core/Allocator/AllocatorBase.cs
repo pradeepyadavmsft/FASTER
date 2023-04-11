@@ -308,6 +308,15 @@ namespace FASTER.core
         /// <param name="physicalAddress"></param>
         /// <returns></returns>
         public abstract ref Value GetValue(long physicalAddress);
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="recordInfo"></param>
+        public virtual void AddFreeList(long logicalAddress, int numSlots) { }
+
+        public virtual long FreeFromFreeList(int numSlots) { return Constants.kInvalidAddress; }
+
         /// <summary>
         /// Get value from address range
         /// </summary>
@@ -1099,6 +1108,13 @@ namespace FASTER.core
         {
             if (numSlots > PageSize)
                 throw new FasterException("Entry does not fit on page");
+
+            long oldLogicalAddress = FreeFromFreeList(numSlots);
+
+            if (oldLogicalAddress != Constants.kInvalidAddress)
+            {
+                return oldLogicalAddress;
+            }
 
             PageOffset localTailPageOffset = default;
             localTailPageOffset.PageAndOffset = TailPageOffset.PageAndOffset;

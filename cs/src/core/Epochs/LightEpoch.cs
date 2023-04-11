@@ -63,6 +63,7 @@ namespace FASTER.core
         /// <summary>
         /// Default number of entries in the entries table
         /// </summary>
+        /// 
         static readonly ushort kTableSize = Math.Max((ushort)128, (ushort)(Environment.ProcessorCount * 2));
 
         /// <summary>

@@ -56,12 +56,14 @@ namespace FASTER.core
                 newPhysicalAddress = hlog.GetPhysicalAddress(newLogicalAddress);
                 if (VerifyInMemoryAddresses(ref stackCtx))
                 {
-                    if (newLogicalAddress > stackCtx.recSrc.LatestLogicalAddress)
-                        return true;
+                    if (newLogicalAddress < stackCtx.recSrc.Log.ReadOnlyAddress)
+                        continue;
+                    //if (newLogicalAddress > stackCtx.recSrc.LatestLogicalAddress)
+                    return true;
 
                     // This allocation is below the necessary address so abandon it and repeat the loop. TODO potential reuse
-                    hlog.GetInfo(newPhysicalAddress).SetInvalid();  // Skip on log scan
-                    continue;
+                    //hlog.GetInfo(newPhysicalAddress).SetInvalid();  // Skip on log scan
+                    //continue;
                 }
 
                 // In-memory source dropped below HeadAddress during BlockAllocate.

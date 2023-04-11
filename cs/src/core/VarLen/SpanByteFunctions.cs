@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT license.
 
+using System;
 using System.Buffers;
 
 namespace FASTER.core
@@ -13,6 +14,8 @@ namespace FASTER.core
         /// <inheritdoc />
         public override bool SingleWriter(ref Key key, ref SpanByte input, ref SpanByte src, ref SpanByte dst, ref Output output, ref UpsertInfo upsertInfo, WriteReason reason)
         {
+            dst.UnmarkExtraMetadata();
+            dst.ShrinkSerializedLength(src.Length);
             src.CopyTo(ref dst);
             return true;
         }
@@ -24,6 +27,8 @@ namespace FASTER.core
             {
                 return false;
             }
+            //Console.WriteLine($"Before {dst.Length} {src.Length}");
+
 
             // We can adjust the length header on the serialized log, if we wish.
             // This method will also zero out the extra space to retain log scan correctness.
@@ -33,7 +38,7 @@ namespace FASTER.core
             // Write the source data, leaving the destination size unchanged. You will need
             // to mange the actual space used by the value if you stop here.
             src.CopyTo(ref dst);
-
+            //Console.WriteLine($"After {dst.Length} {src.Length}");
             return true;
         }
 

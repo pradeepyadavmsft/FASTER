@@ -117,7 +117,11 @@ namespace FASTER.core
                             // Ignore return value; this is a performance optimization to keep the hash table clean if we can, so if we fail it just means
                             // the hashtable entry has already been updated by someone else.
                             var address = (srcRecordInfo.PreviousAddress == Constants.kTempInvalidAddress) ? Constants.kInvalidAddress : srcRecordInfo.PreviousAddress;
-                            stackCtx.hei.TryCAS(address, tag: 0);
+
+                            if (stackCtx.hei.TryCAS(address, tag: 0))
+                            {
+                                hlog.AddFreeList(stackCtx.recSrc.LogicalAddress, hlog.GetRecordSize(stackCtx.recSrc.PhysicalAddress).Item2);
+                            }
                         }
 
                         status = OperationStatusUtils.AdvancedOpCode(OperationStatus.SUCCESS, StatusCode.InPlaceUpdatedRecord);

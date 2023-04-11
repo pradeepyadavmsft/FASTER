@@ -3,6 +3,8 @@
 
 using Microsoft.Extensions.Logging;
 using System;
+using System.Diagnostics;
+using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -30,6 +32,11 @@ namespace FASTER.core
         internal readonly IVariableLengthStruct<Value> ValueLength;
 
         private readonly OverflowPool<PageUnit> overflowPagePool;
+
+        private readonly ConcurrentQueue<long>[] freeRecords;
+
+        private readonly int numberOfQueues = 300;
+        private readonly int slotSize = 10;
 
         public VariableLengthBlittableAllocator(LogSettings settings, VariableLengthStructSettings<Key, Value> vlSettings, IFasterEqualityComparer<Key> comparer, Action<long, long> evictCallback = null, LightEpoch epoch = null, Action<CommitInfo> flushCallback = null, ILogger logger = null)
             : base(settings, comparer, evictCallback, epoch, flushCallback, logger)
@@ -71,6 +78,13 @@ namespace FASTER.core
                 fixedSizeValue = true;
                 ValueLength = new FixedLengthStruct<Value>();
             }
+
+            if (settings.ReuseRecords)
+            {
+                freeRecords = new ConcurrentQueue<long>[numberOfQueues];
+                for (int i = 0; i < freeRecords.Length; i++)
+                    freeRecords[i] = new ConcurrentQueue<long>();
+            }
         }
 
         internal override int OverflowPageCount => overflowPagePool.Count;
@@ -88,6 +102,43 @@ namespace FASTER.core
         public override ref RecordInfo GetInfoFromBytePointer(byte* ptr)
         {
             return ref Unsafe.AsRef<RecordInfo>(ptr);
+        }
+
+
+        public override void AddFreeList(long logicalAddress, int numSlots)
+        {
+            if (freeRecords == null || numSlots < slotSize)
+                return;
+            int queueId = numSlots / slotSize;
+            queueId = queueId > (numberOfQueues - 1) ? 0 : queueId;
+            freeRecords[queueId].Enqueue(logicalAddress);
+        }
+
+        public override long FreeFromFreeList(int numSlots)
+        {
+            if (freeRecords == null)
+                return Constants.kInvalidAddress;
+            int queueId = (numSlots / slotSize) + 1;
+            queueId = queueId > ((numberOfQueues - 1)) ? 0 : queueId;
+            while (freeRecords[queueId].TryDequeue(out long logicalAddress))
+            {
+                if (logicalAddress < ReadOnlyAddress)
+                { continue; }
+
+                var physicalAddress = GetPhysicalAddress(logicalAddress);
+                int size = GetRecordSize(physicalAddress).Item2;
+
+                if (size >= numSlots)
+                {
+                    return logicalAddress;
+                }
+                else
+                {
+                    Console.WriteLine("Unreachable");
+                }
+            }
+
+            return Constants.kInvalidAddress;
         }
 
         public override ref Key GetKey(long physicalAddress)

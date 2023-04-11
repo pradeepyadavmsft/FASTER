@@ -1,8 +1,11 @@
 ﻿// Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT license.
 
+using System;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+
 
 namespace FASTER.core
 {
@@ -152,6 +155,13 @@ namespace FASTER.core
                         {
                             latchDestination = LatchDestination.CreatePendingContext;
                             goto CreatePendingContext;
+                        }
+                    }
+                    else
+                    {
+                        if (stackCtx.recSrc.LogicalAddress >= hlog.ReadOnlyAddress && srcRecordInfo.PreviousAddress < hlog.BeginAddress)
+                        {
+                            hlog.AddFreeList(stackCtx.recSrc.LogicalAddress, hlog.GetRecordSize(stackCtx.recSrc.PhysicalAddress).Item2);
                         }
                     }
                     goto LatchRelease;
@@ -316,10 +326,13 @@ namespace FASTER.core
 
             if (!TryAllocateRecord(ref pendingContext, ref stackCtx, allocatedSize, recycle: true, out long newLogicalAddress, out long newPhysicalAddress, out OperationStatus status))
                 return status;
+            var sizeAllocated = hlog.GetRecordSize(newPhysicalAddress).Item2;
 
             ref RecordInfo newRecordInfo = ref WriteNewRecordInfo(ref key, hlog, newPhysicalAddress, inNewVersion: fasterSession.Ctx.InNewVersion, tombstone: false, stackCtx.recSrc.LatestLogicalAddress);
+            
             stackCtx.SetNewRecord(newLogicalAddress);
 
+            sizeAllocated = actualSize > sizeAllocated ? actualSize : sizeAllocated;
             UpsertInfo upsertInfo = new()
             {
                 Version = fasterSession.Ctx.version,
@@ -328,8 +341,7 @@ namespace FASTER.core
                 KeyHash = stackCtx.hei.hash,
                 RecordInfo = newRecordInfo
             };
-
-            ref Value newValue = ref hlog.GetValue(newPhysicalAddress, newPhysicalAddress + actualSize);
+            ref Value newValue = ref hlog.GetValue(newPhysicalAddress, newPhysicalAddress + sizeAllocated);
             if (!fasterSession.SingleWriter(ref key, ref input, ref value, ref newValue, ref output, ref newRecordInfo, ref upsertInfo, WriteReason.Upsert))
             {
                 // TODO save allocation for reuse (not retry, because these aren't retry status codes); check other InternalXxx as well

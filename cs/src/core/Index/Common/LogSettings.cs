@@ -74,6 +74,8 @@ namespace FASTER.core
         /// Whether to preallocate the entire log (pages) in memory
         /// </summary>
         public bool PreallocateLog = false;
+
+        public bool ReuseRecords = false;
     }
 
     /// <summary>

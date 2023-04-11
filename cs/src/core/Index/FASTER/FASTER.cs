@@ -193,6 +193,7 @@ namespace FASTER.core
             else if (variableLengthStructSettings != null)
             {
                 keyLen = variableLengthStructSettings.keyLength;
+                logSettings.ReuseRecords = true;
                 hlog = new VariableLengthBlittableAllocator<Key, Value>(logSettings, variableLengthStructSettings,
                     this.comparer, null, epoch, logger: logger ?? loggerFactory?.CreateLogger("VariableLengthAllocator HybridLog"));
                 Log = new LogAccessor<Key, Value>(this, hlog);
