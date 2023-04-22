@@ -33,10 +33,10 @@ namespace FASTER.core
 
         private readonly OverflowPool<PageUnit> overflowPagePool;
 
-        private readonly ConcurrentQueue<long>[] freeRecords;
+       
 
-        private readonly int numberOfQueues = 300;
-        private readonly int slotSize = 10;
+        private readonly int numberOfQueues = 550;
+        private readonly int slotSize = 20;
 
         public VariableLengthBlittableAllocator(LogSettings settings, VariableLengthStructSettings<Key, Value> vlSettings, IFasterEqualityComparer<Key> comparer, Action<long, long> evictCallback = null, LightEpoch epoch = null, Action<CommitInfo> flushCallback = null, ILogger logger = null)
             : base(settings, comparer, evictCallback, epoch, flushCallback, logger)
@@ -111,30 +111,42 @@ namespace FASTER.core
                 return;
             int queueId = numSlots / slotSize;
             queueId = queueId > (numberOfQueues - 1) ? 0 : queueId;
+            AddtoQueue(queueId, logicalAddress);
+        }
+
+        private void AddtoQueue(int queueId, long logicalAddress)
+        {
+            int lowerQueueId = queueId - 10;
+            lowerQueueId = lowerQueueId > 1 ? lowerQueueId : 1;
+            while (freeRecords[queueId].Count > 2000 && queueId >= lowerQueueId)
+            {
+                queueId--;
+            }
             freeRecords[queueId].Enqueue(logicalAddress);
         }
 
         public override long FreeFromFreeList(int numSlots)
         {
-            if (freeRecords == null)
-                return Constants.kInvalidAddress;
             int queueId = (numSlots / slotSize) + 1;
             queueId = queueId > ((numberOfQueues - 1)) ? 0 : queueId;
-            while (freeRecords[queueId].TryDequeue(out long logicalAddress))
+            if (freeRecords != null && freeRecords[queueId].Count > 0 && !Checkpointing)
             {
-                if (logicalAddress < ReadOnlyAddress)
-                { continue; }
-
-                var physicalAddress = GetPhysicalAddress(logicalAddress);
-                int size = GetRecordSize(physicalAddress).Item2;
-
-                if (size >= numSlots)
+                while (freeRecords[queueId].TryDequeue(out long logicalAddress))
                 {
-                    return logicalAddress;
-                }
-                else
-                {
-                    Console.WriteLine("Unreachable");
+                    if (logicalAddress < ReadOnlyAddress)
+                    { continue; }
+
+                    var physicalAddress = GetPhysicalAddress(logicalAddress);
+                    int size = GetRecordSize(physicalAddress).Item2;
+
+                    if (size >= numSlots)
+                    {
+                        return logicalAddress;
+                    }
+                    else
+                    {
+                        Console.WriteLine($"Unreachable s {size} n {numSlots}");
+                    }
                 }
             }
 

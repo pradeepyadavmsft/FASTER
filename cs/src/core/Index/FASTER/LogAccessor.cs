@@ -2,6 +2,7 @@
 // Licensed under the MIT license.
 
 using System;
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Reflection;
 using System.Threading;
@@ -54,6 +55,8 @@ namespace FASTER.core
         /// </summary>
         public long BeginAddress => allocator.BeginAddress;
 
+        public ConcurrentQueue<long>[] FreeRecords => allocator.freeRecords;
+
         /// <summary>
         /// Get the bytes used on the primary log by every record. Does not include
         /// the size of variable-length inline data. Note that class objects occupy
@@ -85,6 +88,27 @@ namespace FASTER.core
                 ShiftHeadAddress(newHeadAddress, wait);
             }
         }
+
+        public void SetCheckpointing(bool checkpointing)
+        {
+            allocator.Checkpointing = checkpointing;
+            
+            bool epochProtected = fht.epoch.ThisInstanceProtected();
+            try
+            {
+                if (!epochProtected)
+                    fht.epoch.Resume();
+                fht.epoch.BumpCurrentEpoch(() => { });
+            }
+            finally
+            {
+                if (!epochProtected)
+                    fht.epoch.Suspend();
+            }
+            
+           
+        }
+
 
         /// <summary>
         /// Total in-memory circular buffer capacity (in number of pages)
